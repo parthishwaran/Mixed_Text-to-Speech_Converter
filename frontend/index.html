@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mixed Language TTS - Tamil & English</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🎙️ Mixed Language TTS Converter</h1>
+            <p class="subtitle">Convert Tamil + English text to natural speech</p>
+        </header>
+
+        <main class="main-content">
+            <div class="input-section">
+                <div class="tab-buttons">
+                    <button class="tab-btn active" data-tab="text">Text Input</button>
+                    <button class="tab-btn" data-tab="file">File Upload</button>
+                </div>
+
+                <div class="tab-content">
+                    <!-- Text Input Tab -->
+                    <div class="tab-pane active" id="text-tab">
+                        <textarea 
+                            id="textInput" 
+                            placeholder="Type or paste your mixed Tamil and English text here... 
+Example: 
+Hello! இது ஒரு மixed language example. How are you today? நலமாக இருக்கிறீர்களா?" 
+                            rows="8"
+                        ></textarea>
+                    </div>
+
+                    <!-- File Upload Tab -->
+                    <div class="tab-pane" id="file-tab">
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <div class="upload-icon">📁</div>
+                            <h3>Upload .txt or .docx File</h3>
+                            <p>Supported formats: .txt, .docx</p>
+                            <input type="file" id="fileInput" accept=".txt,.docx" hidden>
+                            <button class="browse-btn" onclick="document.getElementById('fileInput').click()">
+                                Browse Files
+                            </button>
+                            <div class="file-info" id="fileInfo"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="convertBtn" class="convert-btn">
+                    <span class="btn-text">Convert to Speech</span>
+                    <div class="loader" style="display: none;">
+                        <div class="spinner"></div>
+                        <span id="progressText">Processing... 0%</span>
+                    </div>
+                </button>
+
+                <!-- Visual Progress Bar -->
+                <div id="progressContainer" class="progress-container" style="display: none;">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-meta">
+                        <span id="progressLabel">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="output-section" id="outputSection" style="display: none;">
+                <h3>🎧 Your Audio is Ready!</h3>
+                
+                <div class="audio-player">
+                    <audio id="audioPlayer" controls></audio>
+                </div>
+                
+                <div class="download-section">
+                    <button id="downloadBtn" class="download-btn">
+                        📥 Download MP3
+                    </button>
+                </div>
+            </div>
+
+            <div class="error-message" id="errorMessage" style="display: none;"></div>
+        </main>
+
+        <footer class="footer">
+            <p>Supports mixed Tamil and English text with natural voices</p>
+        </footer>
+    </div>
+
+    <script src="index.js"></script>
+</body>
+</html>
