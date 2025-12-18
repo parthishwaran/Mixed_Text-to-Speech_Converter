@@ -7,8 +7,19 @@ echo ""
 # Navigate to project directory
 cd "$(dirname "$0")"
 
-# Activate virtual environment
-source venv/bin/activate
+# Activate virtual environment (check for .venv first, then venv)
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
+elif [ -d "venv" ]; then
+    source venv/bin/activate
+else
+    echo "⚠️  No virtual environment found (.venv or venv)"
+    echo "Creating virtual environment..."
+    python3 -m venv .venv
+    source .venv/bin/activate
+    echo "Installing dependencies..."
+    pip install -r requirements.txt
+fi
 
 # Check if server is already running
 if lsof -Pi :5000 -sTCP:LISTEN -t >/dev/null ; then
