@@ -1,3 +1,39 @@
+from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+import torch
+import soundfile as sf
+# Add Hugging Face model config
+HF_TTS_MODEL = "ai4bharat/indic-parler-tts"
+HF_TTS_LANGS = {
+    'ta': 'ta',
+    'en': 'en',
+}
+
+# Load model and processor globally (lazy init)
+hf_tts_model = None
+hf_tts_processor = None
+hf_tts_pipe = None
+
+def generate_hf_tts_audio(text, lang='en'):
+    """Generate audio using ai4bharat/indic-parler-tts from Hugging Face"""
+    global hf_tts_model, hf_tts_processor, hf_tts_pipe
+    if hf_tts_model is None or hf_tts_processor is None or hf_tts_pipe is None:
+        hf_tts_model = AutoModelForSpeechSeq2Seq.from_pretrained(HF_TTS_MODEL)
+        hf_tts_processor = AutoProcessor.from_pretrained(HF_TTS_MODEL)
+        hf_tts_pipe = pipeline(
+            "text-to-speech",
+            model=hf_tts_model,
+            tokenizer=hf_tts_processor,
+            feature_extractor=hf_tts_processor,
+            device=0 if torch.cuda.is_available() else -1
+        )
+    lang_code = HF_TTS_LANGS.get(lang, 'en')
+    # The pipeline expects a dict with 'text' and 'lang'
+    result = hf_tts_pipe({"text": text, "lang": lang_code})
+    # Save to temp wav file
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav', dir=TEMP_DIR) as tmp_file:
+        sf.write(tmp_file.name, result["audio"], result["sampling_rate"])
+        audio = AudioSegment.from_wav(tmp_file.name)
+    return audio, 'hf-tts'
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from gtts import gTTS
@@ -5,6 +41,7 @@ import edge_tts
 import asyncio
 import os
 import tempfile
+import json
 from langdetect import detect, LangDetectException
 from pydub import AudioSegment
 from pydub.silence import detect_silence
@@ -23,6 +60,20 @@ TEMP_DIR = tempfile.mkdtemp()
 
 # In-memory job progress tracking
 JOBS = {}
+
+# TTS engine configuration priority: gtts > edge (gTTS is faster for most cases)
+TTS_CONFIG = {
+    'preferred_engine': os.getenv('TTS_ENGINE', 'gtts'),  # gtts, edge, auto
+}
+
+# Cache for language detection to avoid redundant detections
+LANG_DETECT_CACHE = {}
+
+# Edge TTS voices - Free, good quality
+EDGE_VOICES = {
+    'ta': 'ta-IN-PallaviNeural',
+    'en': 'en-IN-NeerjaNeural',
+}
 
 def _init_job(job_id: str):
     JOBS[job_id] = {
@@ -60,20 +111,59 @@ def extract_text_from_docx(file_stream):
         full_text.append(paragraph.text)
     return '\n'.join(full_text)
 
+# Common Tamil words written in English (Tanglish)
+TANGLISH_WORDS = {
+    'romba', 'nalla', 'enna', 'epdi', 'enga', 'inga', 'anga', 'ippo', 'appo',
+    'thaan', 'than', 'illa', 'illai', 'iruku', 'irukku', 'iruken', 'irukken',
+    'panna', 'pannunga', 'sollu', 'sollungo', 'vaanga', 'ponga', 'vanga',
+    'aamam', 'aama', 'seri', 'sariya', 'konjam', 'koncham', 'kastam',
+    'bore', 'adikkudhu', 'adikuthu', 'podhu', 'pothum', 'venum', 'vendum',
+    'theriyum', 'therla', 'theriyala', 'puriyala', 'puriyuthu', 'mudiala',
+    'mudiyum', 'mudiyathu', 'paravala', 'parava', 'nandri', 'vanakkam',
+    'poi', 'vaa', 'va', 'pa', 'da', 'di', 'ma', 'ya', 'ya', 'la', 'le',
+    'kku', 'ku', 'thala', 'anna', 'akka', 'amma', 'appa', 'thangachi',
+    'thambi', 'macha', 'machan', 'machaan', 'nanba', 'nanban', 'dei', 'dey',
+    'apdiya', 'apdi', 'ipdiya', 'ipdi', 'yenda', 'yenada', 'yen', 'yaar',
+    'evlo', 'evalavu', 'etna', 'ethana', 'eppadi', 'yepdi', 'yenge', 'enga',
+    'kaasu', 'panam', 'velai', 'vela', 'venum', 'venaam', 'thevai',
+    'saptu', 'sapadu', 'saapdu', 'kudikka', 'kudicha', 'poyiten', 'vandhuten',
+    'solluren', 'keluren', 'parkuren', 'paakuren', 'poren', 'poidren',
+    'super', 'mass', 'thara', 'level', 'mokka', 'jolly', 'cool', 'vera',
+    'ooru', 'oor', 'veedu', 'veetu', 'kadai', 'office', 'school', 'college',
+    'friend', 'friends', 'guys', 'bro', 'bha', 'ji'
+}
+
 def detect_language(text):
-    """Detect if text is Tamil or English"""
+    """Detect if text is Tamil or English with Tanglish support (cached)"""
+    text_lower = text.lower().strip()
+    
+    # Check cache first
+    if text_lower in LANG_DETECT_CACHE:
+        return LANG_DETECT_CACHE[text_lower]
+    
     try:
-        # For short texts, use character-based detection
-        if len(text.strip()) < 10:
-            tamil_chars = re.findall(r'[\u0B80-\u0BFF]', text)
-            return 'ta' if len(tamil_chars) > len(text) * 0.3 else 'en'
-        
-        lang = detect(text)
-        return lang
-    except LangDetectException:
-        # Fallback to character-based detection
+        # Check for Tamil Unicode characters
         tamil_chars = re.findall(r'[\u0B80-\u0BFF]', text)
-        return 'ta' if len(tamil_chars) > len(text) * 0.3 else 'en'
+        if tamil_chars:
+            result = 'ta'
+        else:
+            # Check if it's a known Tanglish word
+            word_clean = re.sub(r'[^\w]', '', text_lower)
+            if word_clean in TANGLISH_WORDS:
+                result = 'ta-en'  # Tanglish - Tamil word in English script
+            # For short texts, default to English
+            elif len(text.strip()) < 3:
+                result = 'en'
+            else:
+                result = detect(text)
+        
+        # Cache the result
+        LANG_DETECT_CACHE[text_lower] = result
+        return result
+    except LangDetectException:
+        result = 'en'
+        LANG_DETECT_CACHE[text_lower] = result
+        return result
 
 def split_mixed_text(text):
     """Split text into segments based on language"""
@@ -105,16 +195,19 @@ def split_mixed_text(text):
         for word in words:
             word_lang = detect_language(word)
             
+            # Normalize language (treat ta-en as ta for grouping)
+            normalized_lang = 'ta' if word_lang in ['ta', 'ta-en'] else 'en'
+            
             if current_lang is None:
-                current_lang = word_lang
+                current_lang = normalized_lang
                 current_segment = word
-            elif current_lang == word_lang:
+            elif current_lang == normalized_lang:
                 current_segment += " " + word
             else:
                 # Language change detected
                 if current_segment.strip():
                     segments.append((current_segment.strip(), current_lang))
-                current_lang = word_lang
+                current_lang = normalized_lang
                 current_segment = word
         
         if current_segment.strip():
@@ -122,42 +215,93 @@ def split_mixed_text(text):
     
     return segments
 
-async def generate_english_audio(text, voice="en-US-AriaNeural"):
-    """Generate English audio using Edge TTS"""
+# ============================================================================
+# TTS ENGINE IMPLEMENTATIONS
+# ============================================================================
+
+async def generate_edge_audio(text, lang='en'):
+    """Generate audio using Edge TTS (Free, Good Quality)"""
     try:
-        communicate = edge_tts.Communicate(text, voice)
+        voice = EDGE_VOICES[lang]
+        # Slightly faster playback for both languages
+        rate = "-2%" if lang == 'ta' else "+5%"
+        
+        communicate = edge_tts.Communicate(text, voice, rate=rate)
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3', dir=TEMP_DIR) as tmp_file:
             tmp_path = tmp_file.name
             await communicate.save(tmp_path)
-            
-        # Load and process audio
-        audio = AudioSegment.from_mp3(tmp_path)
-        # Add small pause at the end
-        audio = audio + AudioSegment.silent(duration=200)
         
-        return audio
+        audio = AudioSegment.from_mp3(tmp_path)
+        return audio, 'edge'
+    
     except Exception as e:
-        print(f"Error generating English audio: {e}")
-        # Fallback to gTTS
-        return generate_tamil_audio(text, 'en')  # gTTS can handle English too
+        print(f"Edge TTS error: {e}")
+        return None, None
 
-def generate_tamil_audio(text, lang='ta'):
-    """Generate Tamil audio using gTTS"""
+def generate_gtts_audio(text, lang='en'):
+    """Generate audio using gTTS (Fallback, Basic Quality)"""
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3', dir=TEMP_DIR) as tmp_file:
+            tmp_path = tmp_file.name
+            # Use faster speed for all languages
             tts = gTTS(text=text, lang=lang, slow=False)
-            tts.save(tmp_file.name)
-            
-        audio = AudioSegment.from_mp3(tmp_file.name)
-        # Add small pause at the end
-        audio = audio + AudioSegment.silent(duration=200)
+            tts.save(tmp_path)
         
-        return audio
+        audio = AudioSegment.from_mp3(tmp_path)
+        return audio, 'gtts'
+    
     except Exception as e:
-        print(f"Error generating Tamil audio: {e}")
-        # Return silent audio as fallback
-        return AudioSegment.silent(duration=1000)
+        print(f"gTTS error: {e}")
+        return None, None
+
+async def generate_audio_smart(text, lang='en'):
+    """Smart audio generation with automatic fallback cascade"""
+    engines_tried = []
+    
+    # Determine engine priority based on config
+    preferred = TTS_CONFIG['preferred_engine']
+    
+    # Try Hugging Face TTS first if set
+    if preferred in ['hf-tts', 'auto']:
+        try:
+            audio, engine = generate_hf_tts_audio(text, lang)
+            if audio:
+                print(f"✓ Generated with HF TTS ({lang})")
+                return audio, engine
+            engines_tried.append('hf-tts')
+        except Exception as e:
+            print(f"HF TTS error: {e}")
+            engines_tried.append('hf-tts')
+    # Try gTTS
+    if preferred in ['gtts', 'auto']:
+        audio, engine = generate_gtts_audio(text, lang)
+        if audio:
+            print(f"✓ Generated with gTTS ({lang})")
+            return audio, engine
+        engines_tried.append('gtts')
+    # Fallback to Edge TTS
+    if preferred in ['edge', 'auto']:
+        audio, engine = await generate_edge_audio(text, lang)
+        if audio:
+            print(f"✓ Generated with Edge TTS ({lang})")
+            return audio, engine
+        engines_tried.append('edge')
+    raise Exception(f"All TTS engines failed. Tried: {', '.join(engines_tried)}")
+
+async def generate_english_audio(text):
+    """Generate English audio with smart engine selection"""
+    audio, engine = await generate_audio_smart(text, 'en')
+    return audio
+
+async def generate_tamil_audio(text):
+    """Generate Tamil audio with smart engine selection"""
+    audio, engine = await generate_audio_smart(text, 'ta')
+    return audio
+
+# ============================================================================
+# MAIN TTS PROCESSING
+# ============================================================================
 
 async def process_text_to_speech(text, job_id: str = None):
     """Main function to process text and generate mixed-language audio"""
@@ -171,44 +315,52 @@ async def process_text_to_speech(text, job_id: str = None):
     if job_id:
         _set_progress(job_id, 10, f'Detected {len(segments)} segments')
     
-    audio_segments = []
-    
     total = max(1, len(segments))
-    for i, (segment_text, lang) in enumerate(segments):
+    
+    # Generate audio for all segments in parallel
+    async def generate_segment_audio(i, segment_text, lang):
+        """Generate audio for a single segment"""
         print(f"Segment {i+1}: {lang} - {segment_text[:50]}...")
-        
         try:
             if lang == 'ta':  # Tamil
-                audio_segment = generate_tamil_audio(segment_text)
+                audio = await generate_tamil_audio(segment_text)
             else:  # English
-                audio_segment = await generate_english_audio(segment_text)
-            
-            audio_segments.append(audio_segment)
-            
-        except Exception as e:
-            print(f"Error processing segment {i+1}: {e}")
-            # Add silent segment as fallback
-            audio_segments.append(AudioSegment.silent(duration=1000))
-        finally:
+                audio = await generate_english_audio(segment_text)
             if job_id:
-                # Allocate 80% of progress to segment processing
                 cur = 10 + int(((i + 1) / total) * 80)
                 _set_progress(job_id, cur, f'Processed segment {i+1}/{total}')
+            return audio
+        except Exception as e:
+            print(f"Error processing segment {i+1}: {e}")
+            if job_id:
+                cur = 10 + int(((i + 1) / total) * 80)
+                _set_progress(job_id, cur, f'Processed segment {i+1}/{total}')
+            return AudioSegment.silent(duration=1000)
+    
+    # Run all segment generation tasks in parallel
+    tasks = [generate_segment_audio(i, segment_text, lang) for i, (segment_text, lang) in enumerate(segments)]
+    audio_segments = await asyncio.gather(*tasks)
     
     if not audio_segments:
         raise Exception("No audio segments were generated")
     
-    # Combine all audio segments
+    # Combine all audio segments with minimal gap between language switches
     print("Combining audio segments...")
     if job_id:
         _set_progress(job_id, 92, 'Combining audio segments')
     combined_audio = audio_segments[0]
-    for segment in audio_segments[1:]:
-        combined_audio = combined_audio + segment
+    for i, segment in enumerate(segments[1:], 1):
+        # Add 5ms gap only when language changes, otherwise join directly
+        prev_lang = segments[i-1][1]
+        curr_lang = segment[1]
+        if prev_lang != curr_lang:
+            combined_audio = combined_audio + AudioSegment.silent(duration=0.005)
+        combined_audio = combined_audio + audio_segments[i]
     
-    # Export final audio
+    # Speed up the final audio by 25%
+    faster_audio = combined_audio.speedup(playback_speed=1.25, chunk_size=150, crossfade=25)
     output_path = os.path.join(TEMP_DIR, "mixed_output.mp3")
-    combined_audio.export(output_path, format="mp3", bitrate="192k")
+    faster_audio.export(output_path, format="mp3", bitrate="192k")
     
     print("Audio generation completed successfully")
     if job_id:
@@ -229,6 +381,10 @@ def _run_conversion_job(job_id: str, text: str):
         job = JOBS.get(job_id, {})
         job['error'] = str(e)
         _set_status(job_id, 'error', f'Conversion failed: {e}')
+
+# ============================================================================
+# API ROUTES
+# ============================================================================
 
 @app.route('/convert', methods=['POST'])
 async def convert_text_to_speech():
@@ -335,10 +491,26 @@ def download_result(job_id):
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'message': 'TTS Service is running'})
+    """Health check endpoint with TTS engine status"""
+    engines_status = {
+        'edge': 'available',
+        'gtts': 'available',
+        'preferred_engine': TTS_CONFIG['preferred_engine']
+    }
+    return jsonify({
+        'status': 'healthy',
+        'message': 'TTS Service is running',
+        'engines': engines_status
+    })
 
 if __name__ == '__main__':
     # Ensure temp directory exists
     os.makedirs(TEMP_DIR, exist_ok=True)
+    print("\n" + "="*60)
+    print("🎤 Mixed Text-to-Speech Converter - Enhanced Edition")
+    print("="*60)
+    print(f"Edge TTS: ✓ Available")
+    print(f"gTTS: ✓ Available")
+    print(f"Preferred Engine: {TTS_CONFIG['preferred_engine']}")
+    print("="*60 + "\n")
     app.run(debug=True, port=5000)

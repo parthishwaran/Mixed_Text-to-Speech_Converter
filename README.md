@@ -2,23 +2,44 @@
 
 # Mixed Language TTS (Tamil + English)
 
-Convert mixed Tamil and English text into natural speech. English uses Microsoft Edge TTS; Tamil uses gTTS. The app auto-detects language segments, stitches audio seamlessly, and shows real-time progress while converting.
+Convert mixed Tamil and English text into natural speech with **4 TTS engine options**: Azure (premium), Google Cloud (premium), Edge TTS (free), and gTTS (free). The app auto-detects language segments, intelligently selects the best available engine, stitches audio seamlessly, and shows real-time progress.
 
 </div>
 
 ## ✨ Features
 
 - Mixed-language detection (Tamil + English) per word/segment
-- English TTS via Edge TTS; Tamil TTS via gTTS (with fallbacks)
+- **Smart TTS Engine Selection**: Automatic fallback cascade (Azure → Google → Edge → gTTS)
+- **Premium Options**: Azure Cognitive Services & Google Cloud TTS (optional)
+- **Free Options**: Edge TTS & gTTS (work out-of-the-box, no API keys needed)
 - Real-time progress indicator (0–100%) during conversion
 - Upload .txt or .docx or paste text directly
 - Outputs a single MP3 with smooth concatenation
+- Tanglish support (Tamil words written in English script)
 
 ## 🧱 Tech Stack
 
-- Backend: Python, Flask, Flask-CORS, asyncio, pydub, langdetect, python-docx, edge-tts, gTTS
+- **Backend**: Python, Flask, Flask-CORS, asyncio, pydub, langdetect, python-docx
+- **TTS Engines**: 
+	- Azure Cognitive Services (optional, premium)
+	- Google Cloud Text-to-Speech (optional, premium)
+	- Edge TTS (free, included)
+	- gTTS (free, included)
 - Frontend: Vanilla HTML/CSS/JS
 - System dependency: ffmpeg (for pydub to process MP3)
+
+## 🎤 TTS Engine Comparison
+
+| Engine | Quality | Cost | Setup |
+|--------|---------|------|-------|
+| **Azure** | ⭐⭐⭐⭐⭐ Best | Free tier: 500K chars/month | Requires API key |
+| **Google** | ⭐⭐⭐⭐ Excellent | Free tier: 1M chars/month | Requires credentials |
+| **Edge TTS** | ⭐⭐⭐ Good | Free unlimited | No setup needed ✅ |
+| **gTTS** | ⭐⭐ Basic | Free unlimited | No setup needed ✅ |
+
+**Default mode**: Uses Edge TTS (good quality, free, no configuration)
+
+See [TTS_COMPARISON.md](TTS_COMPARISON.md) for detailed comparison and [SETUP_GUIDE.md](SETUP_GUIDE.md) for premium engine setup.
 
 ## 📦 Project Structure
 

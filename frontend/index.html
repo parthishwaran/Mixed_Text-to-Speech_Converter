@@ -13,74 +13,145 @@
             <p class="subtitle">Convert Tamil + English text to natural speech</p>
         </header>
 
-        <main class="main-content">
-            <div class="input-section">
-                <div class="tab-buttons">
-                    <button class="tab-btn active" data-tab="text">Text Input</button>
-                    <button class="tab-btn" data-tab="file">File Upload</button>
-                </div>
+        <!-- Section Tabs -->
+        <div class="section-tabs">
+            <button class="section-tab active" data-section="tts">🎙️ Text to Speech</button>
+            <button class="section-tab" data-section="ai-chat">🤖 AI Chat</button>
+        </div>
 
-                <div class="tab-content">
-                    <!-- Text Input Tab -->
-                    <div class="tab-pane active" id="text-tab">
-                        <textarea 
-                            id="textInput" 
-                            placeholder="Type or paste your mixed Tamil and English text here... 
-Example: 
-Hello! இது ஒரு மixed language example. How are you today? நலமாக இருக்கிறீர்களா?" 
-                            rows="8"
-                        ></textarea>
+        <main class="main-content">
+            <!-- TTS Section -->
+            <div class="section-pane active" id="tts-section">
+                <div class="input-section">
+
+                    <div class="tab-buttons">
+                        <button class="tab-btn active" data-tab="text">Text Input</button>
+                        <button class="tab-btn" data-tab="file">File Upload</button>
                     </div>
 
-                    <!-- File Upload Tab -->
-                    <div class="tab-pane" id="file-tab">
-                        <div class="file-upload-area" id="fileUploadArea">
-                            <div class="upload-icon">📁</div>
-                            <h3>Upload .txt or .docx File</h3>
-                            <p>Supported formats: .txt, .docx</p>
-                            <input type="file" id="fileInput" accept=".txt,.docx" hidden>
-                            <button class="browse-btn" onclick="document.getElementById('fileInput').click()">
-                                Browse Files
-                            </button>
-                            <div class="file-info" id="fileInfo"></div>
+                    <!-- TTS Engine Selection -->
+                    <div style="margin: 10px 0;">
+                        <label style="font-weight: 500;">
+                            <input type="checkbox" id="useHfTts" style="margin-right: 6px;">
+                            Use Hugging Face ai4bharat/indic-parler-tts (high quality, slower)
+                        </label>
+                    </div>
+
+                    <div class="tab-content">
+                        <!-- Text Input Tab -->
+                        <div class="tab-pane active" id="text-tab">
+                            <textarea 
+                                id="textInput" 
+                                placeholder="Type or paste your mixed Tamil and English text here... 
+Example: 
+Hello! இது ஒரு மixed language example. How are you today? நலமாக இருக்கிறீர்களா?" 
+                                rows="8"
+                            ></textarea>
+                        </div>
+
+                        <!-- File Upload Tab -->
+                        <div class="tab-pane" id="file-tab">
+                            <div class="file-upload-area" id="fileUploadArea">
+                                <div class="upload-icon">📁</div>
+                                <h3>Upload .txt or .docx File</h3>
+                                <p>Supported formats: .txt, .docx</p>
+                                <input type="file" id="fileInput" accept=".txt,.docx" hidden>
+                                <button class="browse-btn" onclick="document.getElementById('fileInput').click()">
+                                    Browse Files
+                                </button>
+                                <div class="file-info" id="fileInfo"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="convertBtn" class="convert-btn">
+                        <span class="btn-text">Convert to Speech</span>
+                        <div class="loader" style="display: none;">
+                            <div class="spinner"></div>
+                            <span id="progressText">Processing... 0%</span>
+                        </div>
+                    </button>
+
+                <!-- AI Processing Option -->
+                <div class="ai-process-section">
+                    <div class="ai-process-header">
+                        <label class="ai-toggle">
+                            <input type="checkbox" id="useAiProcessing">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">🤖 Process with AI first</span>
+                        </label>
+                    </div>
+                    <div class="ai-prompt-area" id="aiPromptArea" style="display: none;">
+                        <textarea 
+                            id="aiPromptInput" 
+                            placeholder="Enter instructions for AI (e.g., 'Summarize this text', 'Translate to Tamil', 'Explain in simple terms', 'Read this as a news anchor')"
+                            rows="2"
+                        ></textarea>
+                        <p class="ai-hint">💡 The AI will process your text based on your instructions, then convert the result to speech.</p>
+                    </div>
+                </div>
+                            <span id="progressLabel">0%</span>
                         </div>
                     </div>
                 </div>
 
-                <button id="convertBtn" class="convert-btn">
-                    <span class="btn-text">Convert to Speech</span>
-                    <div class="loader" style="display: none;">
-                        <div class="spinner"></div>
-                        <span id="progressText">Processing... 0%</span>
+                <div class="output-section" id="outputSection" style="display: none;">
+                    <h3>🎧 Your Audio is Ready!</h3>
+                    
+                    <div class="audio-player">
+                        <audio id="audioPlayer" controls></audio>
                     </div>
-                </button>
-
-                <!-- Visual Progress Bar -->
-                <div id="progressContainer" class="progress-container" style="display: none;">
-                    <div class="progress-bar">
-                        <div id="progressFill" class="progress-fill" style="width: 0%"></div>
-                    </div>
-                    <div class="progress-meta">
-                        <span id="progressLabel">0%</span>
+                    
+                    <div class="download-section">
+                        <button id="downloadBtn" class="download-btn">
+                            📥 Download MP3
+                        </button>
                     </div>
                 </div>
+
+                <div class="error-message" id="errorMessage" style="display: none;"></div>
             </div>
 
-            <div class="output-section" id="outputSection" style="display: none;">
-                <h3>🎧 Your Audio is Ready!</h3>
-                
-                <div class="audio-player">
-                    <audio id="audioPlayer" controls></audio>
+            <!-- AI Chat Section -->
+            <div class="section-pane" id="ai-chat-section">
+                <div class="api-config">
+                    <h3>🔑 API Configuration</h3>
+                    <p class="api-hint">Paste your OpenRouter API key below. Get one from <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a></p>
+                    <div class="api-key-input">
+                        <input type="password" id="apiKeyInput" placeholder="sk-or-v1-xxxxxxxxxxxx">
+                        <button id="toggleApiKey" class="toggle-key-btn">👁️</button>
+                        <button id="saveApiKey" class="save-key-btn">Save</button>
+                    </div>
+                    <div class="api-status" id="apiStatus"></div>
                 </div>
-                
-                <div class="download-section">
-                    <button id="downloadBtn" class="download-btn">
-                        📥 Download MP3
-                    </button>
+
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="chat-welcome">
+                            <div class="welcome-icon">🤖</div>
+                            <h3>AI Assistant</h3>
+                            <p>Powered by Google Gemini 3 Flash via OpenRouter</p>
+                            <p class="welcome-hint">Ask me anything! I can help with questions, writing, coding, and more.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-input-area">
+                        <textarea 
+                            id="chatInput" 
+                            placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+                            rows="2"
+                        ></textarea>
+                        <button id="sendChatBtn" class="send-chat-btn">
+                            <span class="send-icon">➤</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="chat-actions">
+                    <button id="clearChatBtn" class="clear-chat-btn">🗑️ Clear Chat</button>
+                    <button id="speakResponseBtn" class="speak-response-btn" disabled>🔊 Speak Last Response</button>
                 </div>
             </div>
-
-            <div class="error-message" id="errorMessage" style="display: none;"></div>
         </main>
 
         <footer class="footer">

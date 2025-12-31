@@ -1,4 +1,4 @@
-#!/home/parthishwaran/Desktop/cu/Mixed_Text-to-Speech_Converter/.venv/bin/python3
+#!/home/parthishwaran/Desktop/cu/Mixed_Text-to-Speech_Converter/.venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
