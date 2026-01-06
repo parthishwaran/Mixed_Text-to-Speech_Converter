@@ -61,6 +61,27 @@ Hello! இது ஒரு மixed language example. How are you today? நல�
                                 </button>
                                 <div class="file-info" id="fileInfo"></div>
                             </div>
+
+                            <!-- OCR Morse Image Upload -->
+                            <div class="file-upload-area" id="morseUploadArea" style="margin-top:18px;">
+                                <div class="upload-icon">📷</div>
+                                <h3>OCR Morse from Image</h3>
+                                <p>Upload an image containing Morse code (dots/dashes). The server will OCR using <code>microsoft/trocr-large-printed</code> and decode the Morse.</p>
+                                <input type="file" id="morseImageInput" accept="image/*" hidden>
+                                <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+                                    <button class="browse-btn" onclick="document.getElementById('morseImageInput').click()">Choose Image</button>
+                                    <button id="uploadMorseBtn" class="browse-btn" style="background:#4caf50;color:white;">Upload & Decode</button>
+                                    <div id="morsePreview" style="font-size:13px;color:#555;margin-left:8px;"></div>
+                                </div>
+                                <div id="morseResult" style="margin-top:12px;display:none;">
+                                    <h4>Decoded Morse:</h4>
+                                    <pre id="morseDecodedText" style="white-space:pre-wrap;background:#f7f7f7;padding:8px;border-radius:6px;border:1px solid #e3e3e3;"></pre>
+                                    <div style="margin-top:8px;display:flex;gap:8px;">
+                                        <button id="useDecodedBtn" class="browse-btn">Use in TTS Input</button>
+                                        <button id="copyDecodedBtn" class="browse-btn">Copy Text</button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

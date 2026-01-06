@@ -27,6 +27,16 @@ class TTSConverter {
         // File input change
         document.getElementById('fileInput').addEventListener('change', (e) => this.handleFileSelect(e));
 
+        // Morse image input and upload
+        const morseImageInput = document.getElementById('morseImageInput');
+        if (morseImageInput) {
+            morseImageInput.addEventListener('change', (e) => this.handleMorseImageSelect(e));
+        }
+        const uploadMorseBtn = document.getElementById('uploadMorseBtn');
+        if (uploadMorseBtn) {
+            uploadMorseBtn.addEventListener('click', () => this.uploadMorseImage());
+        }
+
         // Convert button
         document.getElementById('convertBtn').addEventListener('click', () => this.convertTextToSpeech());
 
@@ -237,6 +247,72 @@ class TTSConverter {
             reader.onerror = (e) => reject(new Error('Failed to read file'));
             reader.readAsText(file);
         });
+    }
+
+    // ======= Morse OCR Helpers =======
+    handleMorseImageSelect(event) {
+        const file = event.target.files[0];
+        const preview = document.getElementById('morsePreview');
+        const morseResult = document.getElementById('morseResult');
+        if (!file) return;
+        preview.textContent = `${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+        // Hide previous result
+        if (morseResult) morseResult.style.display = 'none';
+    }
+
+    async uploadMorseImage() {
+        const input = document.getElementById('morseImageInput');
+        const preview = document.getElementById('morsePreview');
+        const morseResult = document.getElementById('morseResult');
+        const decodedPre = document.getElementById('morseDecodedText');
+
+        if (!input || !input.files[0]) {
+            this.showError('Please choose an image containing Morse code first.');
+            return;
+        }
+
+        try {
+            preview.textContent = 'Uploading...';
+            const formData = new FormData();
+            formData.append('image', input.files[0]);
+
+            const res = await fetch('http://localhost:5000/ocr_morse', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'OCR/Morse decoding failed');
+            }
+
+            const decoded = data.decoded_text || '';
+            decodedPre.textContent = decoded || '[no decoded text]';
+            morseResult.style.display = 'block';
+            preview.textContent = `Decoded ${decoded ? '✔' : '–'}`;
+
+            // Wire up buttons
+            document.getElementById('useDecodedBtn').onclick = () => {
+                const textInput = document.getElementById('textInput');
+                if (textInput) {
+                    textInput.value = (textInput.value ? textInput.value + '\n' : '') + decoded;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            };
+            document.getElementById('copyDecodedBtn').onclick = async () => {
+                try {
+                    await navigator.clipboard.writeText(decoded);
+                    this.showApiStatus('Decoded text copied to clipboard', 'success');
+                } catch (e) {
+                    this.showError('Failed to copy text');
+                }
+            };
+
+        } catch (err) {
+            console.error('OCR Morse error:', err);
+            this.showError(err.message || 'OCR/Morse decoding failed');
+            preview.textContent = '';
+        }
     }
 
     async processWithAI(text, prompt) {
